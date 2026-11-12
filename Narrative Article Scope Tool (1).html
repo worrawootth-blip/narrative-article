@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Narrative Article Scope Tool</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#f3f6f4;--card:#fff;--ink:#1d2b27;--mute:#5b6b66;--line:#d3dcd8;--acc:#1f6f5c;--acc2:#e8f2ee;--ex:#8a3b2e;--exbg:#fbeeeb;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14201c;--card:#1c2b26;--ink:#e6efeb;--mute:#9fb2ab;--line:#2f443d;--acc:#5ec4a6;--acc2:#213a32;--ex:#f0a597;--exbg:#3a2420}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Sarabun',system-ui,sans-serif;line-height:1.6}
+main{max-width:980px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}
+h1{font-size:1.5rem;margin:0}
+.sub{color:var(--mute);margin:2px 0 0;font-size:.95rem}
+.seg{display:inline-flex;border:1px solid var(--acc);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--acc);padding:7px 16px;font:inherit;cursor:pointer}
+.seg button.on{background:var(--acc);color:var(--bg)}
+.form{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.row{display:grid;grid-template-columns:230px 1fr;border-bottom:1px solid var(--line)}
+.row:last-child{border:0}
+.row>div{padding:12px 14px}
+.lab{background:var(--acc2);font-weight:600}
+.lab small{display:block;font-weight:400;color:var(--mute);font-size:.82rem}
+.hd .lab,.hd>div{font-weight:700;background:var(--acc);color:var(--bg)}
+input[type=text],input[type=number],textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+textarea{resize:vertical;min-height:60px}
+input:focus,textarea:focus,button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:5px 14px;font:inherit;cursor:pointer}
+.chip.on{background:var(--acc);border-color:var(--acc);color:var(--bg)}
+.other{margin-top:8px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0}
+.btn{border:1px solid var(--acc);background:var(--acc);color:var(--bg);border-radius:8px;padding:9px 20px;font:inherit;font-weight:600;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--acc)}
+.btn.danger{background:transparent;border-color:var(--ex);color:var(--ex)}
+#result{display:none;margin-top:10px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:640px}
+th,td{padding:10px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+th{background:var(--acc);color:var(--bg)}
+th.ex{background:var(--ex)}
+td.ex{background:var(--exbg)}
+td:first-child{font-weight:600;width:20%}
+.notes{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 18px;margin-top:16px}
+.notes h3{margin:12px 0 4px;font-size:1.05rem}
+.notes p{margin:4px 0 12px}
+.err{color:var(--ex);margin:0 0 8px;min-height:1.2em}
+@media(max-width:640px){.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+<header>
+ <div><h1 id="t-title"></h1><p class="sub" id="t-sub"></p></div>
+ <div class="seg" role="group" aria-label="Language"><button id="b-th" class="on">ไทย</button><button id="b-en">English</button></div>
+</header>
+
+<div class="form" id="form"></div>
+<p class="err" id="err" role="alert"></p>
+<div class="actions">
+ <button class="btn ghost" id="demo"></button>
+ <button class="btn" id="go"></button>
+ <button class="btn danger" id="reset"></button>
+</div>
+
+<section id="result">
+ <h2 id="r-title" style="font-size:1.2rem"></h2>
+ <div class="tw"><table id="tbl"></table></div>
+ <div class="notes" id="notes"></div>
+ <div class="actions"><button class="btn ghost" id="dl"></button></div>
+</section>
+</main>
+
+<script>
+const T={
+th:{title:"กำหนดขอบเขตข้อมูลสำหรับบทความ Narrative Review",sub:"กรอกเกณฑ์คัดเข้า แล้วระบบจะสร้างเกณฑ์คัดออกและตารางสรุปให้",
+crit:"หัวข้อ",inc:"เกณฑ์คัดเข้า (Inclusion)",exc:"เกณฑ์คัดออก (Exclusion)",
+db:"ฐานข้อมูลที่ใช้",dbs:"เช่น Scopus, Web of Science, ScienceDirect, TCI",dbp:"Scopus, Web of Science, ScienceDirect, TCI",
+yr:"ช่วงระยะเวลาของเอกสาร",yrs:"เช่น 2000-2026",
+ft:"Full-text",ftOpts:["มี","ไม่มี"],
+dt:"ประเภทของเอกสาร",dtOpts:["Research article","Academic article","Review article","Book / Book chapter","Thesis / Dissertation","Conference paper"],
+ff:"ประเภทไฟล์",ffOpts:["PDF","DOCX","Website"],
+lg:"ภาษาที่ใช้",lgOpts:["ภาษาอังกฤษ","ภาษาไทย"],
+oth:"อื่น ๆ (ระบุ)",
+ky:"คำสำคัญในการสืบค้น (Keywords)",kys:"คั่นด้วยเครื่องหมายจุลภาค เช่น Political Economy, Development, Sustainable",kyp:"Political Economy, Development, Sustainable",
+sq:"คำค้นที่ใช้ (Search string)",sqs:"คัดลอกคำค้นจาก Scopus หรือฐานข้อมูลอื่นมาวางได้",sqp:"( KEY ( development AND sustainability ) ) AND PUBYEAR AFT 2024",
+exKy:"ไม่มีคำสำคัญที่กำหนดในชื่อเรื่อง บทคัดย่อ หรือคำสำคัญของเอกสาร",exSq:"ไม่ตรงกับคำค้นที่ใช้สืบค้น",
+d_ky:(d)=>`${d.ky?`คำสำคัญที่ใช้ในการสืบค้น ได้แก่ ${d.ky}. `:''}${d.sq?`คำค้นที่ใช้ในการสืบค้นจริง: ${d.sq}`:''}`.trim(),
+n:"จำนวนเอกสารทั้งหมดที่ใช้",ns:"ตัวเลข",
+kw:"ความเกี่ยวข้องกับหัวข้อ",kwi:"เนื้อหาตรงกับหัวข้อและวัตถุประสงค์ของบทความ",
+pr:"คุณภาพของแหล่งข้อมูล",pri:"ตีพิมพ์ในวารสารที่ผ่านการประเมินโดยผู้ทรงคุณวุฒิ (peer-reviewed)",
+du:"ความซ้ำซ้อน",dui:"ไม่เป็นเอกสารที่ซ้ำกัน",
+ac:"การเข้าถึงเอกสาร",
+add:"เกณฑ์เพิ่มเติม",addi:"ระบุเกณฑ์เพิ่มเติม (ถ้ามี) คั่นด้วยเครื่องหมายจุลภาค",
+demo:"กรอกข้อมูลตัวอย่าง",go:"ประมวลผล",reset:"รีเซ็ตข้อมูล",dl:"ดาวน์โหลดเป็น Excel",
+rt:"สรุปขอบเขตข้อมูลการวิเคราะห์",
+need:"กรุณากรอกข้อมูลอย่างน้อย: ฐานข้อมูล ช่วงเวลา และจำนวนเอกสาร",
+confirm:"ต้องการล้างข้อมูลทั้งหมดหรือไม่?",
+none:"ไม่ระบุ",
+ftY:"เอกสารต้องมี Full-text",ftN:"ไม่จำกัดว่าต้องมี Full-text",
+ftYx:"ไม่มี Full-text (มีเฉพาะบทคัดย่อ)",ftNx:"-",
+notInc:"ประเภทอื่นนอกเหนือจากที่ระบุ",
+exDb:"ไม่ได้มาจากฐานข้อมูลที่ระบุ",exYr:"ตีพิมพ์นอกช่วงเวลา",
+exLg:"เขียนด้วยภาษาอื่นนอกเหนือจากที่ระบุ",
+exKw:"เนื้อหาไม่เกี่ยวข้องกับหัวข้อ",exPr:"ไม่ผ่านการประเมินโดยผู้ทรงคุณวุฒิ (เช่น บทความความคิดเห็น จดหมายถึงบรรณาธิการ บทคัดย่อประชุม)",
+exDu:"เอกสารซ้ำ",
+exAc:"ไม่สามารถเข้าถึงเอกสารฉบับเต็มได้",
+desc:"คำอธิบายรายละเอียด",
+d_intro:(c)=>`การศึกษานี้เป็นบทความประเภท Narrative Review ผู้วิจัยสืบค้นเอกสารจากฐานข้อมูล ${c.db} ครอบคลุมเอกสารที่ตีพิมพ์ในช่วง ${c.yr} รวมจำนวนเอกสารที่นำมาวิเคราะห์ทั้งสิ้น ${c.n} ฉบับ`,
+d_inc:(c)=>`เกณฑ์คัดเข้า: เอกสารต้องเป็นประเภท ${c.dt} ในรูปแบบไฟล์ ${c.ff} และเขียนด้วย${c.lg} ${c.ft==="มี"?"โดยต้องมีเนื้อหาฉบับเต็ม (Full-text) ":""}อีกทั้งต้องมีเนื้อหาตรงกับหัวข้อที่ศึกษา`,
+d_exc:"เกณฑ์คัดออก: เป็นเกณฑ์ที่ตรงข้ามกับเกณฑ์คัดเข้า ได้แก่ เอกสารที่อยู่นอกฐานข้อมูล ช่วงเวลา ประเภทเอกสาร รูปแบบไฟล์ หรือภาษาที่กำหนด รวมถึงเอกสารที่ซ้ำซ้อน เนื้อหาไม่เกี่ยวข้อง หรือไม่สามารถเข้าถึงฉบับเต็มได้",
+d_note:"หมายเหตุ: Narrative Review ไม่จำเป็นต้องใช้โปรโตคอลการสืบค้นแบบเป็นระบบเต็มรูปแบบ (เช่น PRISMA) แต่การรายงานเกณฑ์คัดเข้า-คัดออกอย่างโปร่งใสช่วยให้ผู้อ่านประเมินความน่าเชื่อถือและความเอนเอียงในการคัดเลือกเอกสารได้"},
+en:{title:"Data Scope Definition for Narrative Review Articles",sub:"Enter your inclusion criteria; the tool builds the exclusion criteria and a summary table.",
+crit:"Item",inc:"Inclusion criteria",exc:"Exclusion criteria",
+db:"Databases used",dbs:"e.g. Scopus, Web of Science, ScienceDirect, TCI",dbp:"Scopus, Web of Science, ScienceDirect, TCI",
+yr:"Publication period",yrs:"e.g. 2000-2026",
+ft:"Full-text",ftOpts:["Available","Not available"],
+dt:"Document type",dtOpts:["Research article","Academic article","Review article","Book / Book chapter","Thesis / Dissertation","Conference paper"],
+ff:"File type",ffOpts:["PDF","DOCX","Website"],
+lg:"Language",lgOpts:["English","Thai"],
+oth:"Other (specify)",
+ky:"Search keywords",kys:"Separate with commas, e.g. Political Economy, Development, Sustainable",kyp:"Political Economy, Development, Sustainable",
+sq:"Search string used",sqs:"Paste the query copied from Scopus or another database",sqp:"( KEY ( development AND sustainability ) ) AND PUBYEAR AFT 2024",
+exKy:"Does not contain the keywords in title, abstract or author keywords",exSq:"Does not match the search string used",
+d_ky:(d)=>`${d.ky?`Search keywords: ${d.ky}. `:''}${d.sq?`Search string used: ${d.sq}`:''}`.trim(),
+n:"Total number of documents",ns:"Number",
+kw:"Relevance to topic",kwi:"Content matches the topic and aims of the article",
+pr:"Source quality",pri:"Published in a peer-reviewed outlet",
+du:"Duplication",dui:"Not a duplicate record",
+ac:"Document access",
+add:"Additional criteria",addi:"Add extra criteria (optional), separated by commas",
+demo:"Fill example data",go:"Generate",reset:"Reset",dl:"Download as Excel",
+rt:"Summary of analysis data scope",
+need:"Please fill in at least: databases, publication period and number of documents.",
+confirm:"Clear all entered data?",
+none:"Not specified",
+ftY:"Full-text must be available",ftN:"Full-text availability not required",
+ftYx:"Full-text not available (abstract only)",ftNx:"-",
+notInc:"Types other than those specified",
+exDb:"Not retrieved from the specified databases",exYr:"Published outside the period",
+exLg:"Written in languages other than those specified",
+exKw:"Content not relevant to the topic",exPr:"Not peer-reviewed (e.g. opinion pieces, letters, conference abstracts)",
+exDu:"Duplicate records",
+exAc:"Full document cannot be accessed",
+desc:"Detailed description",
+d_intro:(c)=>`This study is a narrative review. Literature was retrieved from ${c.db}, covering documents published during ${c.yr}. A total of ${c.n} documents were included in the analysis.`,
+d_inc:(c)=>`Inclusion criteria: documents had to be ${c.dt}, available as ${c.ff}, and written in ${c.lg}. ${c.ft==="Available"?"Full text had to be available. ":""}Content also had to match the topic under study.`,
+d_exc:"Exclusion criteria: these mirror the inclusion criteria, i.e. documents outside the specified databases, period, document types, file formats or languages, as well as duplicates, irrelevant content, or documents whose full text could not be accessed.",
+d_note:"Note: a narrative review does not require a full systematic protocol (e.g. PRISMA), but reporting inclusion and exclusion criteria transparently lets readers judge credibility and possible selection bias."}};
+
+let lang='th', sel={ft:null,dt:new Set(),ff:new Set(),lg:new Set()}, last=null;
+const $=id=>document.getElementById(id), t=()=>T[lang];
+
+function chips(key,opts,single){
+ return `<div class="chips" data-k="${key}">`+opts.map((o,i)=>`<button type="button" class="chip${sel[key]&&(single?sel[key]===o:sel[key].has(o))?' on':''}" data-v="${o}">${o}</button>`).join('')+`</div>`;
+}
+function render(){
+ const L=t(), v=id=>($(id)?$(id).value:'');
+ const keep={ky:v('ky'),sq:v('sq'),db:v('db'),yr:v('yr'),n:v('n'),oD:v('oDt'),oF:v('oFf'),oL:v('oLg'),add:v('add')};
+ document.documentElement.lang=lang;
+ $('t-title').textContent=L.title;$('t-sub').textContent=L.sub;
+ $('go').textContent=L.go;$('demo').textContent=L.demo;$('reset').textContent=L.reset;$('dl').textContent=L.dl;
+ $('b-th').classList.toggle('on',lang==='th');$('b-en').classList.toggle('on',lang==='en');
+ const row=(l,h,s)=>`<div class="row"><div class="lab">${l}${s?`<small>${s}</small>`:''}</div><div>${h}</div></div>`;
+ $('form').innerHTML=
+ `<div class="row hd"><div class="lab">${L.crit}</div><div>${L.inc}</div></div>`+
+ row(L.db,`<input type="text" id="db" placeholder="${L.dbp}">`,L.dbs)+
+ row(L.yr,`<input type="text" id="yr" placeholder="2000-2026">`,L.yrs)+
+ row(L.ky,`<input type="text" id="ky" placeholder="${L.kyp}">`,L.kys)+
+ row(L.sq,`<textarea id="sq" spellcheck="false" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.85rem" placeholder="${L.sqp}"></textarea>`,L.sqs)+
+ row(L.ft,chips('ft',L.ftOpts,true))+
+ row(L.dt,chips('dt',L.dtOpts)+`<input type="text" class="other" id="oDt" placeholder="${L.oth}">`)+
+ row(L.ff,chips('ff',L.ffOpts)+`<input type="text" class="other" id="oFf" placeholder="${L.oth}">`)+
+ row(L.lg,chips('lg',L.lgOpts)+`<input type="text" class="other" id="oLg" placeholder="${L.oth}">`)+
+ row(L.n,`<input type="number" min="1" id="n" placeholder="${L.ns}">`)+
+ row(L.add,`<textarea id="add" placeholder="${L.addi}"></textarea>`);
+ $('ky').value=keep.ky||'';$('sq').value=keep.sq||'';$('db').value=keep.db||'';$('yr').value=keep.yr||'';$('n').value=keep.n||'';
+ $('oDt').value=keep.oD||'';$('oFf').value=keep.oF||'';$('oLg').value=keep.oL||'';$('add').value=keep.add||'';
+ if(last)build(); // refresh result in new language
+}
+// chip clicks. Selections are stored as option index so language switching keeps them
+document.addEventListener('click',e=>{
+ const c=e.target.closest('.chip'); if(!c)return;
+ const k=c.parentElement.dataset.k, opts=t()[k+'Opts'], i=opts.indexOf(c.dataset.v);
+ if(k==='ft'){sel.ft=(sel.ft===c.dataset.v)?null:c.dataset.v}
+ else{const s=sel[k]; s.has(c.dataset.v)?s.delete(c.dataset.v):s.add(c.dataset.v)}
+ c.classList.toggle('on');
+});
+function setLang(l){
+ if(l===lang)return;
+ const old=T[lang],nw=T[l],map=k=>{const m={};old[k+'Opts'].forEach((o,i)=>m[o]=nw[k+'Opts'][i]);return m};
+ const m={ft:map('ft'),dt:map('dt'),ff:map('ff'),lg:map('lg')};
+ sel.ft=sel.ft?m.ft[sel.ft]:null;
+ ['dt','ff','lg'].forEach(k=>sel[k]=new Set([...sel[k]].map(x=>m[k][x])));
+ lang=l;render();
+}
+$('b-th').onclick=()=>setLang('th');$('b-en').onclick=()=>setLang('en');
+
+function gather(){
+ const L=t(), val=id=>$(id).value.trim();
+ const join=(set,o)=>[...set,...(o?o.split(',').map(s=>s.trim()).filter(Boolean):[])];
+ return {ky:val('ky'),sq:val('sq'),db:val('db'),yr:val('yr'),n:val('n'),ft:sel.ft,
+  dt:join(sel.dt,val('oDt')),ff:join(sel.ff,val('oFf')),lg:join(sel.lg,val('oLg')),
+  add:val('add').split(',').map(s=>s.trim()).filter(Boolean)};
+}
+function build(){
+ const L=t(), c=last, j=a=>a.length?a.join(', '):L.none;
+ const yrTxt=c.yr||L.none, dbTxt=c.db||L.none;
+ const isFT=c.ft===L.ftOpts[0];
+ const rows=[
+  [L.db,dbTxt,`${L.exDb}: ${dbTxt}`],
+  [L.yr,yrTxt,`${L.exYr} ${yrTxt}`],
+  [L.ky,c.ky||L.none,c.ky?L.exKy:'-'],
+  [L.sq,c.sq||L.none,c.sq?L.exSq:'-'],
+  [L.ft,c.ft?(isFT?L.ftY:L.ftN):L.none,c.ft?(isFT?L.ftYx:L.ftNx):L.none],
+  [L.dt,j(c.dt),`${L.notInc}`],
+  [L.ff,j(c.ff),`${L.notInc}`],
+  [L.lg,j(c.lg),L.exLg],
+  [L.n,`${c.n} ${lang==='th'?'ฉบับ':'documents'}`,'-'],
+  [L.kw,L.kwi,L.exKw],
+  [L.pr,L.pri,L.exPr],
+  [L.du,L.dui,L.exDu],
+  [L.ac,lang==='th'?'สามารถเข้าถึงเอกสารฉบับเต็มได้':'Full document accessible',L.exAc]
+ ];
+ c.add.forEach(a=>rows.push([L.add,a,(lang==='th'?'ไม่เข้าเกณฑ์: ':'Does not meet: ')+a]));
+ c.rows=rows;
+ $('r-title').textContent=L.rt;
+ $('tbl').innerHTML=`<thead><tr><th>${L.crit}</th><th>${L.inc}</th><th class="ex">${L.exc}</th></tr></thead><tbody>`+
+  rows.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td class="ex">${esc(r[2])}</td></tr>`).join('')+`</tbody>`;
+ const d={ky:c.ky,sq:c.sq,db:dbTxt,yr:yrTxt,n:c.n,dt:j(c.dt),ff:j(c.ff),lg:j(c.lg),ft:c.ft};
+ c.desc=[L.d_intro(d),...(c.ky||c.sq?[L.d_ky(d)]:[]),L.d_inc(d),L.d_exc,L.d_note];
+ $('notes').innerHTML=`<h3>${L.desc}</h3>`+c.desc.map(p=>`<p>${esc(p)}</p>`).join('');
+ $('result').style.display='block';
+}
+const esc=s=>String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+
+$('go').onclick=()=>{
+ const c=gather();
+ if(!c.db||!c.yr||!c.n){$('err').textContent=t().need;return}
+ $('err').textContent='';last=c;build();
+ $('result').scrollIntoView({behavior:'smooth'});
+};
+$('dl').onclick=()=>{
+ if(!last)return; const L=t();
+ const data=[[L.crit,L.inc,L.exc],...last.rows,[],[L.desc],...last.desc.map(p=>[p])];
+ const ws=XLSX.utils.aoa_to_sheet(data);
+ ws['!cols']=[{wch:28},{wch:50},{wch:55}];
+ const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Scope');
+ XLSX.writeFile(wb,'narrative-article-scope.xlsx');
+};
+$('demo').onclick=()=>{
+ const L=t();
+ sel={ft:L.ftOpts[0],dt:new Set([L.dtOpts[0],L.dtOpts[1]]),ff:new Set([L.ffOpts[0],L.ffOpts[2]]),lg:new Set(L.lgOpts)};
+ last=null;$('result').style.display='none';$('err').textContent='';
+ render();
+ const set=(id,v)=>$(id).value=v;
+ set('ky','Political Economy, Development, Sustainable');
+ set('sq','( KEY ( development AND sustainability ) ) AND PUBYEAR AFT 2024');
+ set('db','Scopus, Web of Science, ScienceDirect, TCI');
+ set('yr','2000-2026');set('n','60');
+ set('oDt','');set('oFf','');set('oLg','');
+ set('add',lang==='th'?'บทความที่ไม่มีการอ้างอิงเอกสาร, บทความที่ไม่มีบทคัดย่อ':'Articles without references, Articles without abstracts');
+};
+$('reset').onclick=()=>{
+ if(!confirm(t().confirm))return;
+ sel={ft:null,dt:new Set(),ff:new Set(),lg:new Set()};last=null;
+ $('result').style.display='none';$('err').textContent='';
+ ['ky','sq','db','yr','n','oDt','oFf','oLg','add'].forEach(id=>$(id)&&($(id).value=''));
+ render();
+};
+render();
+</script>
+</body>
+</html>
